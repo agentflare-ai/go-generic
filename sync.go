@@ -8,7 +8,7 @@ import (
 type SyncPool[T any] sync.Pool
 
 func (p *SyncPool[T]) Get() T {
-	v, ok := p.New().(T)
+	v, ok := (*sync.Pool)(p).Get().(T)
 	if !ok {
 		panic(fmt.Errorf("expected %T, got %T", v, v))
 	}
@@ -16,5 +16,5 @@ func (p *SyncPool[T]) Get() T {
 }
 
 func (p *SyncPool[T]) Put(x T) {
-	p.Put(x)
+	(*sync.Pool)(p).Put(x)
 }
