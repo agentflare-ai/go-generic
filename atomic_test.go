@@ -365,4 +365,3 @@ func BenchmarkAtomicValue_Concurrent_Store(b *testing.B) {
 		}
 	})
 }
-
