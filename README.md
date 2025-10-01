@@ -8,9 +8,54 @@ This package contains reusable generic types and utilities for Go applications, 
 
 ## Features
 
+- **AtomicValue[T]**: A type-safe wrapper around `atomic.Value` that provides compile-time type safety for atomic operations on generic types.
 - **SyncPool[T]**: A type-safe wrapper around `sync.Pool` that provides compile-time type safety for pooled objects.
 
 ## Usage
+
+### AtomicValue
+
+```go
+package main
+
+import (
+    "github.com/agentflare-ai/generic"
+)
+
+func main() {
+    // Create an atomic value for strings
+    var av generic.AtomicValue[string]
+    
+    // Store a value
+    av.Store("hello")
+    
+    // Load the value
+    value := av.Load() // Returns "hello"
+    
+    // Swap with a new value and get the old one
+    old := av.Swap("world") // Returns "hello"
+    
+    // Compare and swap (only swaps if current value matches)
+    swapped := av.CompareAndSwap("world", "goodbye") // Returns true
+}
+```
+
+With custom types:
+
+```go
+type Config struct {
+    Timeout int
+    Retries int
+}
+
+var av generic.AtomicValue[*Config]
+av.Store(&Config{Timeout: 30, Retries: 3})
+
+// Safe concurrent access
+config := av.Load()
+newConfig := &Config{Timeout: 60, Retries: 5}
+av.CompareAndSwap(config, newConfig)
+```
 
 ### SyncPool
 
