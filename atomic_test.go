@@ -5,9 +5,9 @@ import (
 	"testing"
 )
 
-func TestAtomicValue_Load_Store(t *testing.T) {
+func TestAtomic_Load_Store(t *testing.T) {
 	t.Run("string value", func(t *testing.T) {
-		var av AtomicValue[string]
+		av := MakeAtomic[string]()
 		av.Store("hello")
 
 		got := av.Load()
@@ -17,7 +17,7 @@ func TestAtomicValue_Load_Store(t *testing.T) {
 	})
 
 	t.Run("int value", func(t *testing.T) {
-		var av AtomicValue[int]
+		av := MakeAtomic[int]()
 		av.Store(42)
 
 		got := av.Load()
@@ -32,7 +32,7 @@ func TestAtomicValue_Load_Store(t *testing.T) {
 			Name string
 		}
 
-		var av AtomicValue[TestStruct]
+		av := MakeAtomic[TestStruct]()
 		expected := TestStruct{ID: 123, Name: "test"}
 		av.Store(expected)
 
@@ -47,7 +47,7 @@ func TestAtomicValue_Load_Store(t *testing.T) {
 			Value int
 		}
 
-		var av AtomicValue[*TestStruct]
+		av := MakeAtomic[*TestStruct]()
 		expected := &TestStruct{Value: 999}
 		av.Store(expected)
 
@@ -61,10 +61,9 @@ func TestAtomicValue_Load_Store(t *testing.T) {
 	})
 }
 
-func TestAtomicValue_Swap(t *testing.T) {
+func TestAtomic_Swap(t *testing.T) {
 	t.Run("swap string values", func(t *testing.T) {
-		var av AtomicValue[string]
-		av.Store("first")
+		av := MakeAtomic("first")
 
 		old := av.Swap("second")
 		if old != "first" {
@@ -78,8 +77,7 @@ func TestAtomicValue_Swap(t *testing.T) {
 	})
 
 	t.Run("swap int values", func(t *testing.T) {
-		var av AtomicValue[int]
-		av.Store(10)
+		av := MakeAtomic(10)
 
 		old := av.Swap(20)
 		if old != 10 {
@@ -93,10 +91,9 @@ func TestAtomicValue_Swap(t *testing.T) {
 	})
 }
 
-func TestAtomicValue_CompareAndSwap(t *testing.T) {
+func TestAtomic_CompareAndSwap(t *testing.T) {
 	t.Run("successful compare and swap", func(t *testing.T) {
-		var av AtomicValue[string]
-		av.Store("initial")
+		av := MakeAtomic("initial")
 
 		swapped := av.CompareAndSwap("initial", "updated")
 		if !swapped {
@@ -110,8 +107,7 @@ func TestAtomicValue_CompareAndSwap(t *testing.T) {
 	})
 
 	t.Run("failed compare and swap", func(t *testing.T) {
-		var av AtomicValue[string]
-		av.Store("initial")
+		av := MakeAtomic("initial")
 
 		swapped := av.CompareAndSwap("wrong", "updated")
 		if swapped {
@@ -125,8 +121,7 @@ func TestAtomicValue_CompareAndSwap(t *testing.T) {
 	})
 
 	t.Run("int compare and swap", func(t *testing.T) {
-		var av AtomicValue[int]
-		av.Store(100)
+		av := MakeAtomic(100)
 
 		// Successful swap
 		swapped := av.CompareAndSwap(100, 200)
@@ -152,10 +147,9 @@ func TestAtomicValue_CompareAndSwap(t *testing.T) {
 	})
 }
 
-func TestAtomicValue_ConcurrentAccess(t *testing.T) {
+func TestAtomic_ConcurrentAccess(t *testing.T) {
 	t.Run("concurrent stores and loads", func(t *testing.T) {
-		var av AtomicValue[int]
-		av.Store(0)
+		av := MakeAtomic(0)
 
 		var wg sync.WaitGroup
 		const numGoroutines = 10
@@ -183,8 +177,7 @@ func TestAtomicValue_ConcurrentAccess(t *testing.T) {
 	})
 
 	t.Run("concurrent swaps", func(t *testing.T) {
-		var av AtomicValue[string]
-		av.Store("start")
+		av := MakeAtomic("start")
 
 		var wg sync.WaitGroup
 		const numGoroutines = 10
@@ -224,8 +217,7 @@ func TestAtomicValue_ConcurrentAccess(t *testing.T) {
 	})
 
 	t.Run("concurrent compare and swap", func(t *testing.T) {
-		var av AtomicValue[int]
-		av.Store(0)
+		av := MakeAtomic(0)
 
 		var wg sync.WaitGroup
 		const numGoroutines = 10
@@ -262,9 +254,9 @@ func TestAtomicValue_ConcurrentAccess(t *testing.T) {
 	})
 }
 
-func TestAtomicValue_Multiple_Operations(t *testing.T) {
+func TestAtomic_Multiple_Operations(t *testing.T) {
 	t.Run("store, swap, compare-and-swap sequence", func(t *testing.T) {
-		var av AtomicValue[string]
+		av := MakeAtomic[string]()
 
 		// Initial store
 		av.Store("first")
@@ -301,9 +293,37 @@ func TestAtomicValue_Multiple_Operations(t *testing.T) {
 	})
 }
 
-func BenchmarkAtomicValue_Load(b *testing.B) {
-	var av AtomicValue[int]
-	av.Store(42)
+func TestAtomic_ValueSemantics(t *testing.T) {
+	t.Run("copy shares underlying storage", func(t *testing.T) {
+		av := MakeAtomic[int]()
+		getAv := func() Atomic[int] {
+			return av
+		}
+		getAv().Store(1)
+		if got := getAv().Load(); got != 1 {
+			t.Fatalf("expected 1, got %d", got)
+		}
+		if got := getAv().Swap(2); got != 1 {
+			t.Fatalf("expected 1, got %d", got)
+		}
+		if got := getAv().CompareAndSwap(2, 3); !got {
+			t.Fatal("expected true")
+		}
+		if got := getAv().Load(); got != 3 {
+			t.Fatalf("expected 3, got %d", got)
+		}
+	})
+
+	t.Run("default value initialization", func(t *testing.T) {
+		av := MakeAtomic(42)
+		if got := av.Load(); got != 42 {
+			t.Fatalf("expected 42, got %d", got)
+		}
+	})
+}
+
+func BenchmarkAtomic_Load(b *testing.B) {
+	av := MakeAtomic(42)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -311,9 +331,8 @@ func BenchmarkAtomicValue_Load(b *testing.B) {
 	}
 }
 
-func BenchmarkAtomicValue_Store(b *testing.B) {
-	var av AtomicValue[int]
-	av.Store(0)
+func BenchmarkAtomic_Store(b *testing.B) {
+	av := MakeAtomic(0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -321,9 +340,8 @@ func BenchmarkAtomicValue_Store(b *testing.B) {
 	}
 }
 
-func BenchmarkAtomicValue_Swap(b *testing.B) {
-	var av AtomicValue[int]
-	av.Store(0)
+func BenchmarkAtomic_Swap(b *testing.B) {
+	av := MakeAtomic(0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -331,9 +349,8 @@ func BenchmarkAtomicValue_Swap(b *testing.B) {
 	}
 }
 
-func BenchmarkAtomicValue_CompareAndSwap(b *testing.B) {
-	var av AtomicValue[int]
-	av.Store(0)
+func BenchmarkAtomic_CompareAndSwap(b *testing.B) {
+	av := MakeAtomic(0)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -342,9 +359,8 @@ func BenchmarkAtomicValue_CompareAndSwap(b *testing.B) {
 	}
 }
 
-func BenchmarkAtomicValue_Concurrent_Load(b *testing.B) {
-	var av AtomicValue[int]
-	av.Store(42)
+func BenchmarkAtomic_Concurrent_Load(b *testing.B) {
+	av := MakeAtomic(42)
 
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
@@ -354,9 +370,8 @@ func BenchmarkAtomicValue_Concurrent_Load(b *testing.B) {
 	})
 }
 
-func BenchmarkAtomicValue_Concurrent_Store(b *testing.B) {
-	var av AtomicValue[int]
-	av.Store(0)
+func BenchmarkAtomic_Concurrent_Store(b *testing.B) {
+	av := MakeAtomic(0)
 
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {

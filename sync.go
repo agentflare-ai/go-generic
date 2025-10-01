@@ -10,7 +10,8 @@ type SyncPool[T any] sync.Pool
 func (p *SyncPool[T]) Get() T {
 	v, ok := (*sync.Pool)(p).Get().(T)
 	if !ok {
-		panic(fmt.Errorf("expected %T, got %T", v, v))
+		var dv T
+		panic(fmt.Errorf("expected %T, got %T", dv, v))
 	}
 	return v
 }
