@@ -23,7 +23,7 @@ archives:
       - LICENSE*
       - go.mod
       - go.sum
-      - "*.go"
+      - "**/*.go"
 
 checksum:
   name_template: 'checksums.txt'
