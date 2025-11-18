@@ -11,6 +11,7 @@ This package contains reusable generic types and utilities for Go applications, 
 * **Atomic\[T]**: A type-safe atomic value with **value semantics**. Unlike `atomic.Value`, supports safe pass-by-value while maintaining shared atomic storage through closures.
 * **SyncPool\[T]**: A type-safe wrapper around `sync.Pool` that provides compile-time type safety for pooled objects.
 * **FiFo\[T]**: A thread-safe generic FIFO queue with context support and blocking semantics.
+* **RequestWithContext\[C]**: A type-safe HTTP request wrapper that provides compile-time guarantees about context types while forwarding all standard `http.Request` methods.
 
 ## Usage
 
@@ -161,6 +162,101 @@ func main() {
 * **Memory efficient**: Minimal allocations, reuses underlying slice
 
 **Performance**: \~6-8ns per operation with 45B allocation overhead for Put operations.
+
+### RequestWithContext\[C]
+
+A type-safe HTTP request wrapper that ensures context types match at compile-time while providing full compatibility with the standard `http.Request` API:
+
+```go
+package main
+
+import (
+    "context"
+    "net/http"
+    "github.com/agentflare-ai/go-generic"
+)
+
+// Define a custom context type
+type RequestContext struct {
+    context.Context
+    UserID   string
+    TraceID  string
+}
+
+func handleRequest(ctx RequestContext, req *generic.RequestWithContext[RequestContext]) {
+    // Context() returns RequestContext, not context.Context
+    userID := req.Context().UserID
+    traceID := req.Context().TraceID
+
+    // All standard http.Request methods work unchanged
+    method := req.Method
+    path := req.URL.Path
+    headers := req.Header
+
+    // Form parsing, cookies, etc. all work normally
+    if err := req.ParseForm(); err != nil {
+        // handle error
+    }
+    username := req.FormValue("username")
+
+    // Make requests with type-safe contexts
+    resp, err := http.DefaultClient.Do((*http.Request)(req))
+    // ...
+}
+
+func main() {
+    // Create typed context
+    baseCtx := context.Background()
+    reqCtx := RequestContext{
+        Context: baseCtx,
+        UserID:  "user123",
+        TraceID: "trace456",
+    }
+
+    // Create request with typed context
+    req, err := generic.NewRequestWithContext(reqCtx, "GET", "http://api.example.com/users", nil)
+    if err != nil {
+        panic(err)
+    }
+
+    // Pass to handler with compile-time type safety
+    handleRequest(reqCtx, req)
+}
+```
+
+**Key Features:**
+
+* **Type Safety**: Compile-time guarantees that contexts match expected types
+* **Full Compatibility**: All `http.Request` methods work unchanged
+* **Zero Overhead**: Thin wrapper with no runtime performance cost
+* **Panic on Mismatch**: Clear error messages when context types don't match
+
+**Usage Patterns:**
+
+```go
+// Standard context
+req, _ := generic.NewRequestWithContext(context.Background(), "GET", "/api", nil)
+
+// Custom context types
+type APIContext struct {
+    context.Context
+    APIKey     string
+    RateLimit  int
+}
+
+ctx := APIContext{Context: context.Background(), APIKey: "key123"}
+req, _ := generic.NewRequestWithContext(ctx, "POST", "/data", body)
+
+// Forwarding through middleware
+func middleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        // Convert to typed request
+        typedReq := (*generic.RequestWithContext[APIContext])(r)
+        // Now typedReq.Context() returns APIContext, not context.Context
+        next.ServeHTTP(w, (*http.Request)(typedReq))
+    })
+}
+```
 
 ## Performance Comparison
 
