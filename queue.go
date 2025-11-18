@@ -55,13 +55,27 @@ func (q *FiFo[T]) Put(ctx context.Context, x T) error {
 	var s []T
 	select {
 	case s = <-q.items:
+		// Prioritize cancellation if it happened
+		select {
+		case <-ctx.Done():
+			q.items <- s
+			return ctx.Err()
+		default:
+		}
 	case <-q.empty:
+		// Prioritize cancellation if it happened
+		select {
+		case <-ctx.Done():
+			q.empty <- struct{}{}
+			return ctx.Err()
+		default:
+		}
 	case <-ctx.Done():
 		return ctx.Err()
 	}
 	s = append(s, x)
 	q.items <- s
-	return ctx.Err()
+	return nil
 }
 
 // TryEnqueue attempts to enqueue without blocking; returns true if successful.
@@ -91,7 +105,12 @@ func (q *FiFo[T]) Get(ctx context.Context) (T, error) {
 	select {
 	case s = <-q.items:
 	case <-ctx.Done():
-		return zero, ctx.Err()
+		// Context cancelled, but check if we can still get an item (prioritize data)
+		select {
+		case s = <-q.items:
+		default:
+			return zero, ctx.Err()
+		}
 	}
 	x := s[0]
 	s = s[1:]
