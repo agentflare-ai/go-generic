@@ -1,0 +1,84 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+# go-generic is a library, so we don't build binaries
+builds:
+  - skip: true
+
+archives:
+  - name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    files:
+      - README.md
+      - LICENSE*
+      - go.mod
+      - go.sum
+      - "*.go"
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: Features
+      regexp: '^feat:'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^fix:'
+      order: 1
+    - title: Performance
+      regexp: '^perf:'
+      order: 2
+    - title: Others
+      order: 999
+
+release:
+  github:
+    owner: agentflare-ai
+    name: go-generic
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## go-generic Release {{ .Version }}
+
+    A collection of generic utility types and functions for Go with atomic operations, queues, and synchronization primitives.
+
+    ### Installation
+
+    ```bash
+    go get github.com/agentflare-ai/go-generic@{{ .Tag }}
+    ```
+
+    ### What's Changed
+  footer: |
+    **Full Changelog**: https://github.com/agentflare-ai/go-generic/compare/{{ .PreviousTag }}...{{ .Tag }}
+
+    ## Usage
+
+    ```go
+    import "github.com/agentflare-ai/go-generic"
+    ```
+
+    See the [README](https://github.com/agentflare-ai/go-generic#readme) for detailed documentation.
