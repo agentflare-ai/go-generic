@@ -12,6 +12,7 @@ This package contains reusable generic types and utilities for Go applications, 
 * **SyncPool\[T]**: A type-safe wrapper around `sync.Pool` that provides compile-time type safety for pooled objects.
 * **FiFo\[T]**: A thread-safe generic FIFO queue with context support and blocking semantics.
 * **RequestWithContext\[C]**: A type-safe HTTP request wrapper that provides compile-time guarantees about context types while forwarding all standard `http.Request` methods.
+* **SubContext\[C]**: A generic context wrapper that provides access to underlying contexts while maintaining full `context.Context` interface compatibility.
 
 ## Usage
 
@@ -257,6 +258,120 @@ func middleware(next http.Handler) http.Handler {
     })
 }
 ```
+
+### SubContext\[C]
+
+A generic context wrapper that allows extending context functionality while maintaining full compatibility with the standard `context.Context` interface:
+
+```go
+package main
+
+import (
+    "context"
+    "time"
+    "github.com/agentflare-ai/go-generic"
+)
+
+// Define a custom context type
+type CustomContext struct {
+    context.Context
+    UserID   string
+    TraceID  string
+}
+
+func main() {
+    // Create a base context
+    baseCtx := context.Background()
+
+    // Create custom context
+    customCtx := CustomContext{
+        Context: baseCtx,
+        UserID:  "user123",
+        TraceID: "trace456",
+    }
+
+    // Wrap it in SubContext while maintaining context.Context compatibility
+    subCtx := &generic.SubContext[CustomContext]{
+        Context: customCtx,
+    }
+
+    // Use as regular context.Context
+    deadline, ok := subCtx.Deadline()
+    done := subCtx.Done()
+    err := subCtx.Err()
+
+    // Access the original custom context
+    original := subCtx.BaseContext()
+    userID := original.UserID    // "user123"
+    traceID := original.TraceID  // "trace456"
+
+    // All context methods work normally
+    ctx, cancel := context.WithCancel(subCtx)
+    defer cancel()
+
+    go func() {
+        time.Sleep(100 * time.Millisecond)
+        cancel()
+    }()
+
+    select {
+    case <-ctx.Done():
+        // Context was canceled
+    }
+}
+```
+
+**Key Features:**
+
+* **Type Safety**: Generic constraint ensures only context types are accepted
+* **Full Compatibility**: Implements `context.Context` interface completely
+* **Access to Original**: `BaseContext()` method provides access to the wrapped context
+* **Zero Overhead**: Thin wrapper with no runtime performance cost
+* **Extensibility**: Enables context extension patterns without breaking existing APIs
+
+**Usage Patterns:**
+
+```go
+// Basic context wrapping
+base := context.Background()
+sub := &generic.SubContext[context.Context]{Context: base}
+
+// With values
+ctx := context.WithValue(context.Background(), "key", "value")
+sub := &generic.SubContext[context.Context]{Context: ctx}
+
+// With cancellation
+ctx, cancel := context.WithCancel(context.Background())
+sub := &generic.SubContext[context.Context]{Context: ctx}
+
+// Custom context types
+type APIContext struct {
+    context.Context
+    APIKey string
+    User   string
+}
+
+apiCtx := APIContext{
+    Context: context.Background(),
+    APIKey:  "secret",
+    User:    "admin",
+}
+
+sub := &generic.SubContext[APIContext]{Context: apiCtx}
+
+// Later retrieve the custom context
+original := sub.BaseContext()
+fmt.Println(original.APIKey) // "secret"
+```
+
+**When to Use:**
+
+Choose `SubContext[C]` when you need to:
+
+* Extend context functionality while maintaining `context.Context` compatibility
+* Access wrapped context data in middleware or handlers
+* Implement context-aware utilities that need both standard and custom context features
+* Build layered context abstractions
 
 ## Performance Comparison
 
